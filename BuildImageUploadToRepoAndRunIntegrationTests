@@ -1,14 +1,11 @@
 def imageRegistry = 'nexus.tools.digital.testcompany.co.uk:8881'
-
 def imageName = "${imageRegistry}/your-tests"
-
 def imageTag = null
-
 def buildImage = null
-
 def version = 'latest'
+def filter ='@Stoplist'
 
-/* Checkout code from Gitlab / Github as specified in Jenkins pipeline*/
+   /* Checkout code from Gitlab / Github as specified in Jenkins pipeline */
 
 node {
     stage('Checkout') {
@@ -16,13 +13,15 @@ node {
         checkout scm
     }
     
-   /* Build docker container and run powershell scripts inside container */
+   /* Build docker container and run powershell scripts inside container. Pass variables to docker file */
+   
     stage('Build') {
         imageTag = "${imageName}:${version}"
-        buildImage = docker.build(imageTag, " .")
+        buildImage = docker.build((imageTag, "--build-arg TAGNAME=${filter} .")
     }
     
     /* Publish docker image to repository */
+    
     stage('Publish') {
         docker.withRegistry("https://${imageRegistry}", 'REPOSITORY_ACCOUNT') {
             buildImage.push(version)
@@ -30,11 +29,13 @@ node {
     }
     
     /* calls another job which does deployment */
+    
     stage('Deploy') {
      build job: 'docker-deploy', parameters: [string(name: 'IMAGE_TAG', value: version)]
     }
     
     /* If all above steps are successful run integration tests specified 
+    
     stage('Run-Integration-Tests') {
          build job: 'integration-testing', parameters: [string(name: 'BRANCH', value: 'master')], wait: false
     }
