@@ -1,0 +1,48 @@
+def imageName = 'my-tests'
+def imageTag = 'latest'
+def taggedImageName = "${imageName}:${imageTag}"   
+def containerName = UUID.randomUUID().toString() 
+def myService = params.SERVICEENDPOINT
+
+node {
+    stage('Checkout') {
+        deleteDir()
+        checkout scm
+    }
+    
+    stage('GetRootSSLCert') {
+        withCredentials([string(credentialsId: params.ROOTSSLCERTIFICATE, variable: 'root_cert_text')]) {
+        // Remove all space characters from certificate text.
+        // If not removed --build-arg command fails as it does not like spaces
+        ROOTCERTTEXT=root_cert_text.replaceAll("\\s",'');        
+        }        
+    }
+
+    stage('GetInterSSLCert') {
+        withCredentials([string(credentialsId: params.INTERSSLCERTIFICATE, variable: 'inter_cert_text')]) {
+        INTERCERTTEXT=inter_cert_text.replaceAll("\\s",'');        
+        }        
+    }
+
+    stage('BuildAndRun') {
+
+        // Pass certificates text to Dockerfile through build args.      
+        // Build image and run container.
+
+        docker.build(taggedImageName, "--build-arg ROOTCERT=${ROOTCERTTEXT} --build-arg INTERCERT=${INTERCERTTEXT} --no-cache .")
+        sh 'docker run --name ' + containerName + ' -e "' + myService + '" ' + taggedImageName
+                       
+        // Clean up
+        sh 'docker container rm -f ' + containerName
+        sh 'docker rmi -f '+ imageName
+        
+        // Use this to remove any spurious images and containers if neccessary
+        /*
+        sh 'docker container prune -f'
+        sh 'docker image prune -f'
+        */
+        
+        sh 'docker container ls -a'
+        sh 'docker image ls -a'
+    }
+}
